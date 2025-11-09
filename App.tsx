@@ -56,10 +56,11 @@ const Toolbar: React.FC<{
   onFormat: (command: string, value?: string) => void;
   onImageUploadClick: () => void;
   onShareClick: () => void;
+  onPrint: () => void;
   onClear: () => void;
   isLocked: boolean;
   onLockToggle: () => void;
-}> = ({ onFormat, onImageUploadClick, onShareClick, onClear, isLocked, onLockToggle }) => {
+}> = ({ onFormat, onImageUploadClick, onShareClick, onPrint, onClear, isLocked, onLockToggle }) => {
   const [copied, setCopied] = useState(false);
 
   const handleMouseDown = (e: React.MouseEvent, command: string, value?: string) => {
@@ -81,7 +82,7 @@ const Toolbar: React.FC<{
   const disabledClasses = "disabled:opacity-50 disabled:cursor-not-allowed";
 
   return (
-    <div className="p-2 bg-gray-200 border-b border-gray-300 flex items-center flex-wrap gap-x-3 gap-y-2 sticky top-0 z-10">
+    <div className="toolbar p-2 bg-gray-200 border-b border-gray-300 flex items-center flex-wrap gap-x-3 gap-y-2 sticky top-0 z-10">
       {/* Font Family */}
       <div className="flex items-center gap-1">
         <select disabled={isLocked} onChange={(e) => handleSelectChange(e, 'fontName')} defaultValue="monospace" className={`text-sm border border-gray-300 rounded-sm px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${disabledClasses}`}>
@@ -189,6 +190,19 @@ const Toolbar: React.FC<{
                 <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243z"/>
             </svg>
             <span className="ml-1 text-sm">{copied ? 'Copied!' : 'Share'}</span>
+        </button>
+      </div>
+
+      <div className="h-5 w-px bg-gray-300"></div>
+
+      {/* Print Button */}
+      <div className="flex items-center gap-1">
+        <button disabled={isLocked} onMouseDown={(e) => { e.preventDefault(); onPrint(); }} className={`w-auto h-7 flex items-center justify-center hover:bg-gray-300 rounded-sm px-2 ${disabledClasses}`} aria-label="Print or Save as PDF" title="Print or Save as PDF">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1"/>
+            <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4zM1 7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1zm3 4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1H4z"/>
+          </svg>
+          <span className="ml-1 text-sm">Print</span>
         </button>
       </div>
 
@@ -417,6 +431,10 @@ const App: React.FC = () => {
   const handleShareClick = () => {
     navigator.clipboard.writeText(window.location.href);
   };
+
+  const handlePrint = () => {
+    window.print();
+  };
   
   const handleClear = () => {
     if (editorRef.current && window.confirm('Are you sure you want to clear the entire note? This action is irreversible.')) {
@@ -468,7 +486,7 @@ const App: React.FC = () => {
           onSubmit={handlePasswordSubmit}
         />
       )}
-      <main className="bg-zinc-700 flex-grow w-full flex items-center justify-center p-4 sm:p-6 md:p-8">
+      <main className="main-content bg-zinc-700 flex-grow w-full flex items-center justify-center p-4 sm:p-6 md:p-8">
         <style>{`
           .editor-content img {
             max-width: 90%;
@@ -478,6 +496,48 @@ const App: React.FC = () => {
           }
           .editor-content img:hover {
             border-color: #a0aec0; /* gray-400 */
+          }
+          @media print {
+            body, html {
+              background: white !important;
+              color: black !important;
+              margin: 0;
+              padding: 0;
+            }
+            .toolbar, .footer, .notepad-decorations, .margin-line, .lock-overlay {
+              display: none !important;
+            }
+            .main-content {
+              padding: 0 !important;
+              height: auto !important;
+              max-height: none !important;
+              display: block !important;
+            }
+            .notepad-container {
+              box-shadow: none !important;
+              border: none !important;
+              max-width: 100% !important;
+              height: auto !important;
+              max-height: none !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .editor-container {
+              overflow-y: visible !important;
+            }
+            .editor-content {
+              padding: 1in !important;
+              background-image: none !important;
+              line-height: 1.5 !important;
+              color: black !important;
+              min-height: 0 !important;
+              height: auto !important;
+              display: block !important;
+            }
+            .editor-content img {
+              max-width: 6.5in !important; /* Standard page width minus margins */
+              page-break-inside: avoid;
+            }
           }
         `}</style>
         
@@ -490,24 +550,27 @@ const App: React.FC = () => {
           disabled={isLocked}
         />
 
-        <div className="relative w-full max-w-3xl h-[90vh] max-h-[900px] bg-[#FEFBEA] shadow-2xl rounded-sm flex flex-col border-t-[24px] border-zinc-400">
+        <div className="notepad-container relative w-full max-w-3xl h-[90vh] max-h-[900px] bg-[#FEFBEA] shadow-2xl rounded-sm flex flex-col border-t-[24px] border-zinc-400">
           
-          <div className="absolute top-[-12px] left-1/4 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-700 ring-2 ring-zinc-500"></div>
-          <div className="absolute top-[-12px] left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-700 ring-2 ring-zinc-500"></div>
-          <div className="absolute top-[-12px] left-3/4 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-700 ring-2 ring-zinc-500"></div>
+          <div className="notepad-decorations">
+            <div className="absolute top-[-12px] left-1/4 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-700 ring-2 ring-zinc-500"></div>
+            <div className="absolute top-[-12px] left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-700 ring-2 ring-zinc-500"></div>
+            <div className="absolute top-[-12px] left-3/4 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-700 ring-2 ring-zinc-500"></div>
+          </div>
           
           <Toolbar 
             onFormat={handleFormat} 
             onImageUploadClick={() => fileInputRef.current?.click()} 
             onShareClick={handleShareClick}
+            onPrint={handlePrint}
             onClear={handleClear}
             isLocked={isLocked}
             onLockToggle={handleLockToggle}
           />
 
-          <div className="flex-grow flex relative overflow-y-auto">
+          <div className="editor-container flex-grow flex relative overflow-y-auto">
              {isLocked && (
-              <div className="absolute inset-0 bg-gray-200/50 backdrop-blur-sm z-30 flex items-center justify-center">
+              <div className="lock-overlay absolute inset-0 bg-gray-200/50 backdrop-blur-sm z-30 flex items-center justify-center">
                 <div className="text-center p-4">
                   <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" className="mx-auto text-gray-500" viewBox="0 0 16 16"><path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2m3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2"/></svg>
                   <p className="mt-2 text-gray-600 font-semibold">Note is Locked</p>
@@ -517,7 +580,7 @@ const App: React.FC = () => {
                 </div>
               </div>
             )}
-            <div className="absolute top-0 left-12 w-px h-full bg-red-400/80 z-0"></div>
+            <div className="margin-line absolute top-0 left-12 w-px h-full bg-red-400/80 z-0"></div>
             
             <div
               ref={editorRef}
@@ -538,7 +601,7 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <footer className="bg-[#0D1117] text-gray-300 py-6 px-4 sm:px-8">
+      <footer className="footer bg-[#0D1117] text-gray-300 py-6 px-4 sm:px-8">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-6 md:gap-8">
           <div className="text-sm space-y-1">
             <h3 className="font-bold text-white mb-2 text-base">Contact Details</h3>
