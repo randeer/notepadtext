@@ -122,29 +122,36 @@ const App: React.FC = () => {
   const [note, setNote] = useState<string>('');
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isInitialMount = useRef(true);
 
   // Load note from local storage on initial render
   useEffect(() => {
     try {
+      // Enable native browser object resizing for elements like images
+      document.execCommand('enableObjectResizing', false, 'true');
+      
       const savedNote = localStorage.getItem(LOCAL_STORAGE_KEY);
-      const initialContent = savedNote || '<div>Start typing...</div>';
+      // Start with a blank editor. The <br> tag prevents the div from collapsing.
+      const initialContent = savedNote || '<div><br></div>';
       setNote(initialContent);
       if (editorRef.current) {
-        // Set the initial content imperatively to avoid re-render issues
         editorRef.current.innerHTML = initialContent;
       }
     } catch (error) {
-      console.error("Failed to read from local storage", error);
+      console.error("Failed to read from local storage or enable resizing", error);
     }
   }, []);
 
   // Save note to local storage whenever it changes
   useEffect(() => {
+    // Skip saving the initial content that's set on component mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    
     try {
-      // Don't save the initial placeholder text if it hasn't been modified
-      if (note !== '<div>Start typing...</div>') {
-        localStorage.setItem(LOCAL_STORAGE_KEY, note);
-      }
+      localStorage.setItem(LOCAL_STORAGE_KEY, note);
     } catch (error) {
       console.error("Failed to write to local storage", error);
     }
@@ -182,8 +189,7 @@ const App: React.FC = () => {
             max-width: 90%;
             height: auto;
             cursor: move;
-            resize: both;
-            overflow: auto;
+            /* Rely on native browser resize handles instead of CSS resize */
             border: 2px dashed transparent;
             transition: border-color 0.2s;
           }
