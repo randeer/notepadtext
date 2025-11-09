@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { ref, onValue, set, push, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-
 const Toolbar: React.FC<{ 
   onFormat: (command: string, value?: string) => void;
   onImageUploadClick: () => void;
@@ -139,18 +138,93 @@ const Toolbar: React.FC<{
   );
 };
 
+const ImageResizer: React.FC<{
+  image: HTMLImageElement;
+  editorRef: React.RefObject<HTMLDivElement>;
+  onResizeEnd: () => void;
+}> = ({ image, editorRef, onResizeEnd }) => {
+  const resizerDivRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !resizerDivRef.current) return;
+    
+    const resizer = resizerDivRef.current;
+
+    const updatePosition = () => {
+      const editorRect = editor.getBoundingClientRect();
+      const imageRect = image.getBoundingClientRect();
+      
+      resizer.style.top = `${imageRect.top - editorRect.top + editor.scrollTop}px`;
+      resizer.style.left = `${imageRect.left - editorRect.left + editor.scrollLeft}px`;
+      resizer.style.width = `${imageRect.width}px`;
+      resizer.style.height = `${imageRect.height}px`;
+    };
+
+    updatePosition();
+    
+    const observer = new ResizeObserver(updatePosition);
+    observer.observe(image);
+    editor.addEventListener('scroll', updatePosition);
+    window.addEventListener('resize', updatePosition);
+    
+    return () => {
+      observer.disconnect();
+      editor.removeEventListener('scroll', updatePosition);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [image, editorRef]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startWidth = image.offsetWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const newWidth = startWidth + dx;
+      if (newWidth > 20) { // minimum width
+        image.style.width = `${newWidth}px`;
+        image.style.height = 'auto'; 
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      onResizeEnd();
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+  
+  return (
+    <div
+      ref={resizerDivRef}
+      className="absolute border-2 border-blue-500 pointer-events-none z-20"
+    >
+      <div
+        onMouseDown={handleMouseDown}
+        className="absolute bottom-[-8px] right-[-8px] w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-se-resize pointer-events-auto"
+        aria-label="Resize image handle"
+      />
+    </div>
+  );
+};
+
+
 const App: React.FC = () => {
   const [noteId, setNoteId] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<number | null>(null);
   
   // Effect 1: Determine noteId from URL hash or create a new one
   useEffect(() => {
-    try {
-      document.execCommand('enableObjectResizing', false, 'true');
-    } catch(e) { /* This command is deprecated but still useful */ }
-
     const hash = window.location.hash;
     if (hash.startsWith('#/notes/')) {
       setNoteId(hash.substring('#/notes/'.length));
@@ -160,7 +234,6 @@ const App: React.FC = () => {
       const newNoteId = newNoteRef.key;
       if (newNoteId) {
         set(newNoteRef, { content: '<div><br></div>' }).then(() => {
-          // Using window.location.hash is safer in sandboxed environments
           window.location.hash = `/notes/${newNoteId}`;
           setNoteId(newNoteId);
         });
@@ -184,6 +257,28 @@ const App: React.FC = () => {
       off(noteContentRef, 'value', listener);
     };
   }, [noteId]);
+  
+  // Effect 3: Handle image selection
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target;
+      if (target instanceof HTMLImageElement) {
+        setSelectedImage(target);
+      } else if (selectedImage) {
+        setSelectedImage(null);
+      }
+    };
+    
+    editor.addEventListener('mousedown', handleMouseDown);
+
+    return () => {
+      editor.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [selectedImage]);
+
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
     if (debounceTimer.current) {
@@ -224,6 +319,12 @@ const App: React.FC = () => {
   const handleShareClick = () => {
     navigator.clipboard.writeText(window.location.href);
   };
+  
+  const saveContentAfterResize = () => {
+    if (editorRef.current) {
+      handleInput({ currentTarget: editorRef.current } as React.FormEvent<HTMLDivElement>);
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen font-sans antialiased">
@@ -232,7 +333,6 @@ const App: React.FC = () => {
           .editor-content img {
             max-width: 90%;
             height: auto;
-            cursor: move;
             border: 2px dashed transparent;
             transition: border-color 0.2s;
           }
@@ -272,6 +372,13 @@ const App: React.FC = () => {
               className="editor-content w-full h-auto min-h-full flex-grow bg-transparent resize-none outline-none text-zinc-800 text-lg leading-8 tracking-wide px-4 pl-16 pt-8 bg-repeat-y bg-[length:100%_32px] bg-[url('data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27100%25%27 height=%2732px%27%3e%3cline x1=%270%27 y1=%2731px%27 x2=%27100%25%27 y2=%2731px%27 stroke=%27%23bae6fd%27 stroke-width=%271%27/%3e%3c/svg%3e')]"
               spellCheck="false"
             />
+             {selectedImage && editorRef.current && (
+              <ImageResizer 
+                image={selectedImage} 
+                editorRef={editorRef}
+                onResizeEnd={saveContentAfterResize}
+              />
+            )}
           </div>
         </div>
       </main>
