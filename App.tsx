@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { ref, onValue, set, push, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
@@ -6,7 +7,8 @@ const Toolbar: React.FC<{
   onFormat: (command: string, value?: string) => void;
   onImageUploadClick: () => void;
   onShareClick: () => void;
-}> = ({ onFormat, onImageUploadClick, onShareClick }) => {
+  onClear: () => void;
+}> = ({ onFormat, onImageUploadClick, onShareClick, onClear }) => {
   const [copied, setCopied] = useState(false);
 
   const handleMouseDown = (e: React.MouseEvent, command: string, value?: string) => {
@@ -132,6 +134,19 @@ const Toolbar: React.FC<{
                 <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243z"/>
             </svg>
             <span className="ml-1 text-sm">{copied ? 'Copied!' : 'Share'}</span>
+        </button>
+      </div>
+
+      <div className="h-5 w-px bg-gray-300"></div>
+
+      {/* Clear Button */}
+      <div className="flex items-center gap-1">
+        <button onMouseDown={(e) => { e.preventDefault(); onClear(); }} className="w-auto h-7 flex items-center justify-center hover:bg-red-100 text-red-600 rounded-sm px-2" aria-label="Clear Note" title="Clear Note">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
+            <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
+          </svg>
+          <span className="ml-1 text-sm">Clear</span>
         </button>
       </div>
     </div>
@@ -320,6 +335,13 @@ const App: React.FC = () => {
     navigator.clipboard.writeText(window.location.href);
   };
   
+  const handleClear = () => {
+    if (editorRef.current && window.confirm('Are you sure you want to clear the entire note? This action is irreversible.')) {
+      editorRef.current.innerHTML = '<div><br></div>';
+      handleInput({ currentTarget: editorRef.current } as React.FormEvent<HTMLDivElement>);
+    }
+  };
+
   const saveContentAfterResize = () => {
     if (editorRef.current) {
       handleInput({ currentTarget: editorRef.current } as React.FormEvent<HTMLDivElement>);
@@ -359,6 +381,7 @@ const App: React.FC = () => {
             onFormat={handleFormat} 
             onImageUploadClick={() => fileInputRef.current?.click()} 
             onShareClick={handleShareClick}
+            onClear={handleClear}
           />
 
           <div className="flex-grow flex relative overflow-y-auto">
