@@ -1,0 +1,5 @@
+{
+  "name": "Digital Notepad",
+  "description": "A simple and elegant digital notepad application that mimics the look and feel of a classic paper notepad. Type and your notes are automatically saved to your browser.",
+  "requestFramePermissions": []
+}
