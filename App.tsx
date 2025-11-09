@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { db } from './firebase';
+import { ref, onValue, set, push, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-const LOCAL_STORAGE_KEY = 'digital-notepad-content-html';
 
 const Toolbar: React.FC<{ 
   onFormat: (command: string, value?: string) => void;
   onImageUploadClick: () => void;
-}> = ({ onFormat, onImageUploadClick }) => {
+  onShareClick: () => void;
+}> = ({ onFormat, onImageUploadClick, onShareClick }) => {
+  const [copied, setCopied] = useState(false);
+
   const handleMouseDown = (e: React.MouseEvent, command: string, value?: string) => {
     e.preventDefault();
     onFormat(command, value);
@@ -14,6 +18,13 @@ const Toolbar: React.FC<{
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>, command: string) => {
     onFormat(command, e.target.value);
   };
+
+  const handleShare = (e: React.MouseEvent) => {
+      e.preventDefault();
+      onShareClick();
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
     <div className="p-2 bg-gray-200 border-b border-gray-300 flex items-center flex-wrap gap-x-3 gap-y-2 sticky top-0 z-10">
@@ -60,7 +71,6 @@ const Toolbar: React.FC<{
 
       {/* Color Controls */}
       <div className="flex items-center gap-3">
-          {/* Font Color */}
           <div className="flex items-center" title="Font Color">
               <span className="font-serif font-bold text-lg leading-none mr-1" aria-hidden="true">A</span>
               <input 
@@ -71,8 +81,6 @@ const Toolbar: React.FC<{
                   aria-label="Font Color"
               />
           </div>
-
-          {/* Highlight Color */}
           <div className="flex items-center" title="Highlight Color">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" className="mr-1" aria-hidden="true">
                   <path d="M12.879.621a.5.5 0 0 0-.707 0L10.5 2.293 13.707 5.5l1.671-1.672a.5.5 0 0 0 0-.707L12.879.621z"/>
@@ -114,53 +122,86 @@ const Toolbar: React.FC<{
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/><path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/></svg>
         </button>
       </div>
+
+      <div className="h-5 w-px bg-gray-300"></div>
+
+       {/* Share Button */}
+       <div className="flex items-center gap-1">
+        <button onClick={handleShare} className="w-auto h-7 flex items-center justify-center hover:bg-gray-300 rounded-sm px-2" aria-label="Share Note">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-link-45deg" viewBox="0 0 16 16">
+                <path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1 1 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4 4 0 0 1-.128-1.287z"/>
+                <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243z"/>
+            </svg>
+            <span className="ml-1 text-sm">{copied ? 'Copied!' : 'Share'}</span>
+        </button>
+      </div>
     </div>
   );
 };
 
 const App: React.FC = () => {
-  const [note, setNote] = useState<string>('');
+  const [noteId, setNoteId] = useState<string | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const isInitialMount = useRef(true);
-
-  // Load note from local storage on initial render
+  const debounceTimer = useRef<number | null>(null);
+  
+  // Effect 1: Determine noteId from URL hash or create a new one
   useEffect(() => {
     try {
-      // Enable native browser object resizing for elements like images
       document.execCommand('enableObjectResizing', false, 'true');
-      
-      const savedNote = localStorage.getItem(LOCAL_STORAGE_KEY);
-      // Start with a blank editor. The <br> tag prevents the div from collapsing.
-      const initialContent = savedNote || '<div><br></div>';
-      setNote(initialContent);
-      if (editorRef.current) {
-        editorRef.current.innerHTML = initialContent;
+    } catch(e) { /* This command is deprecated but still useful */ }
+
+    const hash = window.location.hash;
+    if (hash.startsWith('#/notes/')) {
+      setNoteId(hash.substring('#/notes/'.length));
+    } else {
+      const notesRef = ref(db, 'notes');
+      const newNoteRef = push(notesRef);
+      const newNoteId = newNoteRef.key;
+      if (newNoteId) {
+        set(newNoteRef, { content: '<div><br></div>' }).then(() => {
+          // Using window.location.hash is safer in sandboxed environments
+          window.location.hash = `/notes/${newNoteId}`;
+          setNoteId(newNoteId);
+        });
       }
-    } catch (error) {
-      console.error("Failed to read from local storage or enable resizing", error);
     }
   }, []);
 
-  // Save note to local storage whenever it changes
+  // Effect 2: Set up Firebase listener whenever noteId changes
   useEffect(() => {
-    // Skip saving the initial content that's set on component mount
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
+    if (!noteId) return;
+
+    const noteContentRef = ref(db, `notes/${noteId}/content`);
+    const listener = onValue(noteContentRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data && editorRef.current && editorRef.current.innerHTML !== data) {
+            editorRef.current.innerHTML = data;
+        }
+    });
+
+    return () => {
+      off(noteContentRef, 'value', listener);
+    };
+  }, [noteId]);
+
+  const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
+    if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
     }
-    
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, note);
-    } catch (error) {
-      console.error("Failed to write to local storage", error);
-    }
-  }, [note]);
+    const currentNoteContent = e.currentTarget.innerHTML;
+    debounceTimer.current = window.setTimeout(() => {
+        if (noteId) {
+            const noteContentRef = ref(db, `notes/${noteId}/content`);
+            set(noteContentRef, currentNoteContent);
+        }
+    }, 500);
+  };
 
   const handleFormat = (command: string, value?: string) => {
     document.execCommand(command, false, value);
     if (editorRef.current) {
-        setNote(editorRef.current.innerHTML); // Sync React state with DOM
+        handleInput({ currentTarget: editorRef.current } as React.FormEvent<HTMLDivElement>);
         editorRef.current.focus();
     }
   };
@@ -175,10 +216,13 @@ const App: React.FC = () => {
       };
       reader.readAsDataURL(file);
     }
-     // Reset file input value to allow uploading the same file again
     if(event.target) {
       event.target.value = '';
     }
+  };
+
+  const handleShareClick = () => {
+    navigator.clipboard.writeText(window.location.href);
   };
 
   return (
@@ -189,7 +233,6 @@ const App: React.FC = () => {
             max-width: 90%;
             height: auto;
             cursor: move;
-            /* Rely on native browser resize handles instead of CSS resize */
             border: 2px dashed transparent;
             transition: border-color 0.2s;
           }
@@ -198,7 +241,6 @@ const App: React.FC = () => {
           }
         `}</style>
         
-        {/* Hidden file input for image uploads */}
         <input
           type="file"
           ref={fileInputRef}
@@ -207,26 +249,26 @@ const App: React.FC = () => {
           className="hidden"
         />
 
-        {/* Main notepad container */}
         <div className="relative w-full max-w-3xl h-[90vh] max-h-[900px] bg-[#FEFBEA] shadow-2xl rounded-sm flex flex-col border-t-[24px] border-zinc-400">
           
-          {/* Decorative holes */}
           <div className="absolute top-[-12px] left-1/4 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-700 ring-2 ring-zinc-500"></div>
           <div className="absolute top-[-12px] left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-700 ring-2 ring-zinc-500"></div>
           <div className="absolute top-[-12px] left-3/4 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-700 ring-2 ring-zinc-500"></div>
           
-          <Toolbar onFormat={handleFormat} onImageUploadClick={() => fileInputRef.current?.click()} />
+          <Toolbar 
+            onFormat={handleFormat} 
+            onImageUploadClick={() => fileInputRef.current?.click()} 
+            onShareClick={handleShareClick}
+          />
 
-          {/* Notepad Body */}
           <div className="flex-grow flex relative overflow-y-auto">
-            {/* Red Margin Line */}
             <div className="absolute top-0 left-12 w-px h-full bg-red-400/80 z-0"></div>
             
             <div
               ref={editorRef}
               contentEditable={true}
               suppressContentEditableWarning={true}
-              onInput={(e) => setNote(e.currentTarget.innerHTML)}
+              onInput={handleInput}
               className="editor-content w-full h-auto min-h-full flex-grow bg-transparent resize-none outline-none text-zinc-800 text-lg leading-8 tracking-wide px-4 pl-16 pt-8 bg-repeat-y bg-[length:100%_32px] bg-[url('data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27100%25%27 height=%2732px%27%3e%3cline x1=%270%27 y1=%2731px%27 x2=%27100%25%27 y2=%2731px%27 stroke=%27%23bae6fd%27 stroke-width=%271%27/%3e%3c/svg%3e')]"
               spellCheck="false"
             />
@@ -236,7 +278,6 @@ const App: React.FC = () => {
 
       <footer className="bg-[#0D1117] text-gray-300 py-6 px-4 sm:px-8">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-6 md:gap-8">
-          {/* Contact Details */}
           <div className="text-sm space-y-1">
             <h3 className="font-bold text-white mb-2 text-base">Contact Details</h3>
             <p>"Chinthra", Kadirandola, Elpitiya</p>
@@ -244,12 +285,10 @@ const App: React.FC = () => {
             <p>Email: <a href="mailto:randeerlalanga92@gmail.com" className="text-blue-400 hover:underline">randeerlalanga92@gmail.com</a></p>
           </div>
 
-          {/* Copyright */}
           <div className="text-sm text-gray-400 order-last md:order-none">
             <p>&copy; 2025 Randheer Lalanga. All rights reserved.</p>
           </div>
 
-          {/* Social Icons */}
           <div className="flex items-center gap-4">
             <a href="#" aria-label="Portfolio" className="text-gray-300 hover:text-white transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
